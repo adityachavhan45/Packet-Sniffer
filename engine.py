@@ -253,6 +253,11 @@ class LiveIDS:
         with self.lock:
             return self._build_summary_locked()
 
+    def _mark_capture_stopped(self) -> None:
+        with self.lock:
+            self.status = "stopped"
+            self._save_summary_locked()
+
     def _apply_detections(
         self,
         *,
@@ -458,7 +463,8 @@ class LiveIDS:
         except KeyboardInterrupt:
             for sniffer_instance in sniffers:
                 sniffer_instance.stop()
-            raise
+            print("\n[*] Capture stopped by user.")
+            self._mark_capture_stopped()
 
     def start_live_capture(self, iface: str | None = None) -> None:
         if os.name != "nt" and hasattr(os, "geteuid") and os.geteuid() != 0:
@@ -482,7 +488,11 @@ class LiveIDS:
 
         self._print_capture_banner(interfaces)
         if len(interfaces) == 1:
-            sniff(iface=interfaces[0], prn=self._packet_handler, store=False)
+            try:
+                sniff(iface=interfaces[0], prn=self._packet_handler, store=False)
+            except KeyboardInterrupt:
+                print("\n[*] Capture stopped by user.")
+                self._mark_capture_stopped()
             return
         self._start_multi_interface_capture(interfaces)
 
