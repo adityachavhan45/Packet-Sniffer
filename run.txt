@@ -1,9 +1,14 @@
 Install dependencies:
 pip install -r requirements.txt
 
-Offline dashboard demo:
+
+1 Terminal : 
 python dashboard.py
 Open: http://localhost:5000
+
+2  Terminal : 
+
+python sniffer.py
 
 //only for Linux OS users
 
