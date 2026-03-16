@@ -85,7 +85,7 @@ class LiveIDS:
     def _print_capture_banner(self, interfaces: list[str]) -> None:
         print(f"[*] LIVE IDS started on interface(s): {', '.join(interfaces)}")
         print("[*] Press CTRL+C to stop")
-        print("[*] Terminal view: Wireshark-style live packet feed\n")
+        print("[*] Terminal view: live packet feed\n")
         print(" No.   Time      Source              Destination         Proto     Len   Flags    Severity    Risk  Info")
         print("-" * 120)
 
