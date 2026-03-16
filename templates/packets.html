@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LIVE IDS Packets</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar panel">
+        <div>
+          <div class="eyebrow">Live IDS</div>
+          <h1>Packets</h1>
+        </div>
+        <nav class="nav-links">
+          <a class="nav-link active" href="/">Packets</a>
+          <a class="nav-link" href="/analytics">Analytics</a>
+        </nav>
+      </header>
+
+      <section class="control-grid">
+        <section class="panel">
+          <div class="eyebrow">Live Capture</div>
+          <h2>One-click capture control</h2>
+          <div class="control-row">
+            <select id="interfaceSelect" class="select-input">
+              <option value="auto">Auto select best interface</option>
+            </select>
+            <button id="startCaptureBtn" class="button primary-button" type="button">Start Live Capture</button>
+          </div>
+          <div class="status-strip">
+            <div class="badge mono" id="statusBadge">Status: loading</div>
+            <div class="badge mono" id="sourceBadge">Source: loading</div>
+            <div class="badge mono" id="interfaceBadge">Interface: loading</div>
+            <div class="badge mono" id="bytesBadge">Bytes: loading</div>
+          </div>
+          <p class="helper-text" id="captureMessage">Choose an interface and start capture, or keep auto mode.</p>
+        </section>
+
+        <section class="panel">
+          <div class="eyebrow">Filters</div>
+          <h2>Search packets fast</h2>
+          <div class="filter-grid">
+            <input id="searchInput" class="text-input" type="text" placeholder="Search source, destination, note, or port" />
+            <select id="protocolFilter" class="select-input">
+              <option value="all">All protocols</option>
+              <option value="TCP">TCP</option>
+              <option value="UDP">UDP</option>
+              <option value="ICMP">ICMP</option>
+            </select>
+            <select id="severityFilter" class="select-input">
+              <option value="all">All severities</option>
+              <option value="normal">Normal</option>
+              <option value="suspicious">Suspicious</option>
+              <option value="alert">Alert</option>
+            </select>
+          </div>
+        </section>
+      </section>
+
+      <section class="primary-grid">
+        <section class="panel output-panel">
+          <div class="section-head">
+            <div>
+              <div class="eyebrow">Terminal Stream</div>
+              <h2>Same output as `sniffer.py`</h2>
+            </div>
+          </div>
+          <div class="terminal-window">
+            <div class="terminal-header mono" id="terminalHeader">Loading packet columns...</div>
+            <div class="terminal-body mono" id="terminalRows"></div>
+          </div>
+        </section>
+
+        <aside class="sidebar">
+          <section class="panel compact-panel">
+            <div class="eyebrow">Overview</div>
+            <div class="mini-stats">
+              <div class="mini-card"><span class="mini-label">Packets</span><strong id="packets">0</strong></div>
+              <div class="mini-card"><span class="mini-label">TCP</span><strong id="tcp">0</strong></div>
+              <div class="mini-card"><span class="mini-label">UDP</span><strong id="udp">0</strong></div>
+              <div class="mini-card"><span class="mini-label">ICMP</span><strong id="icmp">0</strong></div>
+              <div class="mini-card"><span class="mini-label">SYN</span><strong id="synOnly">0</strong></div>
+            </div>
+          </section>
+
+          <section class="panel compact-panel">
+            <div class="eyebrow">Top Sources</div>
+            <div class="simple-list" id="topSources"></div>
+          </section>
+        </aside>
+      </section>
+
+      <section class="panel">
+        <div class="section-head">
+          <div>
+            <div class="eyebrow">Packet Table</div>
+            <h2>Filtered live packets</h2>
+          </div>
+        </div>
+        <div class="packet-table-wrap">
+          <table class="packet-table">
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Source</th>
+                <th>Destination</th>
+                <th>Protocol</th>
+                <th>Port</th>
+                <th>Length</th>
+                <th>Severity</th>
+                <th>Risk</th>
+                <th>Info</th>
+              </tr>
+            </thead>
+            <tbody id="packetTableBody"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const byId = (id) => document.getElementById(id);
+      let latestSummary = null;
+
+      function formatBytes(value) {
+        if (!value) return "0 B";
+        if (value > 1024 * 1024) return `${(value / (1024 * 1024)).toFixed(2)} MB`;
+        if (value > 1024) return `${(value / 1024).toFixed(2)} KB`;
+        return `${value} B`;
+      }
+
+      function setMetric(id, value) {
+        byId(id).textContent = value ?? 0;
+      }
+
+      function renderSimpleList(rootId, items, emptyText, formatter) {
+        const root = byId(rootId);
+        if (!items || !items.length) {
+          root.innerHTML = `<div class="simple-row muted">${emptyText}</div>`;
+          return;
+        }
+        root.innerHTML = items.map(formatter).join("");
+      }
+
+      function renderTerminal(header, rows) {
+        byId("terminalHeader").textContent = header || "No packet columns yet";
+        if (!rows || !rows.length) {
+          byId("terminalRows").innerHTML = '<div class="terminal-line muted">Waiting for live packets...</div>';
+          return;
+        }
+        byId("terminalRows").innerHTML = rows.map((row) => `<div class="terminal-line">${row}</div>`).join("");
+      }
+
+      function filteredEvents(events) {
+        const search = byId("searchInput").value.trim().toLowerCase();
+        const protocol = byId("protocolFilter").value;
+        const severity = byId("severityFilter").value;
+
+        return (events || []).filter((event) => {
+          const matchesSearch =
+            !search ||
+            `${event.source} ${event.destination} ${event.note || ""} ${event.port ?? ""} ${event.protocol}`.toLowerCase().includes(search);
+          const matchesProtocol = protocol === "all" || event.protocol === protocol;
+          const matchesSeverity = severity === "all" || event.flag === severity;
+          return matchesSearch && matchesProtocol && matchesSeverity;
+        });
+      }
+
+      function renderPacketTable(events) {
+        const body = byId("packetTableBody");
+        if (!events.length) {
+          body.innerHTML = '<tr><td colspan="9" class="muted empty-cell">No packets matched the current filters.</td></tr>';
+          return;
+        }
+        body.innerHTML = events
+          .slice(0, 40)
+          .map(
+            (event) => `
+              <tr>
+                <td class="mono">${event.timestamp}</td>
+                <td class="mono">${event.source}</td>
+                <td class="mono">${event.destination}</td>
+                <td>${event.protocol}</td>
+                <td>${event.port ?? "n/a"}</td>
+                <td>${event.length}</td>
+                <td><span class="pill ${event.flag}">${event.flag}</span></td>
+                <td>${event.risk}</td>
+                <td>${event.note || "Normal traffic"}</td>
+              </tr>
+            `,
+          )
+          .join("");
+      }
+
+      async function loadInterfaces() {
+        const response = await fetch("/api/interfaces");
+        const data = await response.json();
+        const select = byId("interfaceSelect");
+        (data.items || []).forEach((item) => {
+          const option = document.createElement("option");
+          option.value = item.id;
+          option.textContent = item.label;
+          select.appendChild(option);
+        });
+      }
+
+      async function startCapture() {
+        const selected = byId("interfaceSelect").value;
+        const response = await fetch("/api/capture/start", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ interface: selected }),
+        });
+        const data = await response.json();
+        byId("captureMessage").textContent = data.message || "Capture request sent.";
+      }
+
+      function applySummary(data) {
+        latestSummary = data;
+        byId("statusBadge").textContent = `Status: ${data.status}`;
+        byId("sourceBadge").textContent = `Source: ${data.source}`;
+        byId("interfaceBadge").textContent = `Interface: ${data.interface || "n/a"}`;
+        byId("bytesBadge").textContent = `Bytes: ${formatBytes(data.total_bytes)}`;
+
+        setMetric("packets", data.packets_processed);
+        setMetric("tcp", data.protocols.TCP);
+        setMetric("udp", data.protocols.UDP);
+        setMetric("icmp", data.protocols.ICMP);
+        setMetric("synOnly", data.flag_counters.syn_only || 0);
+
+        renderTerminal(data.terminal_header, data.terminal_rows || []);
+        renderSimpleList(
+          "topSources",
+          data.top_sources || [],
+          "No source data yet",
+          (item) => `<div class="simple-row"><span class="mono">${item.label}</span><strong>${item.count}</strong></div>`,
+        );
+        renderPacketTable(filteredEvents(data.recent_events || []));
+      }
+
+      async function refresh() {
+        const response = await fetch("/api/summary");
+        applySummary(await response.json());
+      }
+
+      byId("startCaptureBtn").addEventListener("click", startCapture);
+      ["searchInput", "protocolFilter", "severityFilter"].forEach((id) => {
+        byId(id).addEventListener("input", () => {
+          if (latestSummary) {
+            renderPacketTable(filteredEvents(latestSummary.recent_events || []));
+          }
+        });
+      });
+
+      loadInterfaces();
+      refresh();
+      setInterval(refresh, 3000);
+    </script>
+  </body>
+</html>

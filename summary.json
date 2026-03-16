@@ -1,0 +1,33 @@
+{
+  "status": "idle",
+  "started_at": null,
+  "last_packet_at": null,
+  "interface": null,
+  "source": "live",
+  "packets_processed": 0,
+  "total_bytes": 0,
+  "protocols": {
+    "TCP": 0,
+    "UDP": 0,
+    "ICMP": 0,
+    "OTHER": 0
+  },
+  "alerts": [],
+  "recent_events": [],
+  "top_sources": [],
+  "top_destinations": [],
+  "top_ports": [],
+  "top_conversations": [],
+  "threat_leaderboard": [],
+  "timeline": [],
+  "terminal_header": "",
+  "terminal_rows": [],
+  "flag_counters": {},
+  "security_posture": {
+    "score": 100,
+    "classification": "healthy",
+    "high_risk_sources": 0,
+    "active_alerts": 0
+  },
+  "detections": []
+}

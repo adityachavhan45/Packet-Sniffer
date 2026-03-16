@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LIVE IDS Analytics</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar panel">
+        <div>
+          <div class="eyebrow">Live IDS</div>
+          <h1>Analytics</h1>
+        </div>
+        <nav class="nav-links">
+          <a class="nav-link" href="/">Packets</a>
+          <a class="nav-link active" href="/analytics">Analytics</a>
+        </nav>
+      </header>
+
+      <section class="analytics-grid">
+        <section class="panel">
+          <div class="eyebrow">Security Posture</div>
+          <div class="analytics-score" id="postureScore">0</div>
+          <div class="mono muted" id="postureClass">loading</div>
+          <div class="simple-list analytics-list">
+            <div class="simple-row"><span>Active alerts</span><strong id="activeAlerts">0</strong></div>
+            <div class="simple-row"><span>High risk sources</span><strong id="highRiskSources">0</strong></div>
+            <div class="simple-row"><span>Last packet</span><strong class="mono" id="lastPacketAt">n/a</strong></div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="eyebrow">Protocol Mix</div>
+          <div class="mini-stats analytics-cards">
+            <div class="mini-card"><span class="mini-label">Packets</span><strong id="packets">0</strong></div>
+            <div class="mini-card"><span class="mini-label">TCP</span><strong id="tcp">0</strong></div>
+            <div class="mini-card"><span class="mini-label">UDP</span><strong id="udp">0</strong></div>
+            <div class="mini-card"><span class="mini-label">ICMP</span><strong id="icmp">0</strong></div>
+            <div class="mini-card"><span class="mini-label">Bytes</span><strong id="bytes">0</strong></div>
+          </div>
+        </section>
+      </section>
+
+      <section class="bottom-grid">
+        <section class="panel">
+          <div class="eyebrow">Top Sources</div>
+          <h2>Most active hosts</h2>
+          <div class="simple-list" id="topSources"></div>
+        </section>
+
+        <section class="panel">
+          <div class="eyebrow">Alerts</div>
+          <h2>Recent detections</h2>
+          <div class="simple-list" id="alerts"></div>
+        </section>
+
+        <section class="panel">
+          <div class="eyebrow">Ports</div>
+          <h2>Most active service ports</h2>
+          <div class="simple-list" id="ports"></div>
+        </section>
+      </section>
+    </main>
+
+    <script>
+      const byId = (id) => document.getElementById(id);
+
+      function formatBytes(value) {
+        if (!value) return "0 B";
+        if (value > 1024 * 1024) return `${(value / (1024 * 1024)).toFixed(2)} MB`;
+        if (value > 1024) return `${(value / 1024).toFixed(2)} KB`;
+        return `${value} B`;
+      }
+
+      function renderSimpleList(rootId, items, emptyText, formatter) {
+        const root = byId(rootId);
+        if (!items || !items.length) {
+          root.innerHTML = `<div class="simple-row muted">${emptyText}</div>`;
+          return;
+        }
+        root.innerHTML = items.map(formatter).join("");
+      }
+
+      async function refresh() {
+        const response = await fetch("/api/summary");
+        const data = await response.json();
+
+        byId("postureScore").textContent = data.security_posture?.score ?? 0;
+        byId("postureClass").textContent = data.security_posture?.classification ?? "unknown";
+        byId("activeAlerts").textContent = data.security_posture?.active_alerts ?? 0;
+        byId("highRiskSources").textContent = data.security_posture?.high_risk_sources ?? 0;
+        byId("lastPacketAt").textContent = data.last_packet_at || "n/a";
+        byId("packets").textContent = data.packets_processed ?? 0;
+        byId("tcp").textContent = data.protocols?.TCP ?? 0;
+        byId("udp").textContent = data.protocols?.UDP ?? 0;
+        byId("icmp").textContent = data.protocols?.ICMP ?? 0;
+        byId("bytes").textContent = formatBytes(data.total_bytes);
+
+        renderSimpleList(
+          "topSources",
+          data.top_sources || [],
+          "No source data yet",
+          (item) => `<div class="simple-row"><span class="mono">${item.label}</span><strong>${item.count}</strong></div>`,
+        );
+        renderSimpleList(
+          "alerts",
+          (data.alerts || []).slice(0, 10),
+          "No alerts generated yet",
+          (item) => `<div class="simple-row"><span>${item.rule}: ${item.source}</span><strong>${item.severity}</strong></div>`,
+        );
+        renderSimpleList(
+          "ports",
+          data.top_ports || [],
+          "No port data yet",
+          (item) => `<div class="simple-row"><span class="mono">Port ${item.label}</span><strong>${item.count}</strong></div>`,
+        );
+      }
+
+      refresh();
+      setInterval(refresh, 3000);
+    </script>
+  </body>
+</html>

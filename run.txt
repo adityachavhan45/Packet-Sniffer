@@ -1,0 +1,20 @@
+Install dependencies:
+pip install -r requirements.txt
+
+Offline dashboard demo:
+python dashboard.py
+Open: http://localhost:5000
+
+//only for Linux OS users
+
+Live capture:
+sudo python sniffer.py
+
+Live capture on a specific interface:
+sudo python sniffer.py --iface eth0
+
+List available interfaces:
+python sniffer.py --list-ifaces
+
+Analyze existing PCAP from terminal:
+python sniffer.py --pcap packets.pcap
